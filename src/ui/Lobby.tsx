@@ -6,10 +6,12 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { CONSTANTS } from '@/shared/constants.js';
-import { BotLevel, LobbyPlayer } from '@/shared/protocol.js';
+import { BotLevel, HardQuestion, LobbyPlayer, RoomOptions, ScoreRow, ThemeChoice } from '@/shared/protocol.js';
 import { HU } from '../i18n/hu.js';
+import { HostOptions } from './HostOptions.js';
 import { HowToPlay } from './HowToPlay.js';
 import { PixelIcon } from './PixelIcon.js';
+import { HardQuestions, Scoreboard } from './Scoreboard.js';
 
 interface LobbyProps {
   connected: boolean;
@@ -26,6 +28,12 @@ interface LobbyProps {
   onJoinRoom: (code: string, name: string, color: string) => void;
   onStartGame: () => void;
   onStartDemo: (name: string, color: string) => void;
+  onWatch: (code: string) => void;
+  options: RoomOptions;
+  onOptions: (change: { theme?: ThemeChoice; categories?: string[] }) => void;
+  scores: ScoreRow[];
+  hardQuestions: HardQuestion[];
+  watchers: number;
 }
 
 /** Static browser-only build (vite --mode demo): only games against bots, no server. */
@@ -38,7 +46,7 @@ const TIE_COLORS = [
 ];
 
 /** Address students should open: the LAN address of the host computer, or this page's own address. */
-function useJoinUrl(enabled: boolean): string | null {
+export function useJoinUrl(enabled: boolean): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!enabled) return;
@@ -57,6 +65,21 @@ function useJoinUrl(enabled: boolean): string | null {
   return url;
 }
 
+/** QR code (as an image URL) for an address. */
+export function useQr(url: string | null, width = 200): string | null {
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setQr(null);
+      return;
+    }
+    QRCode.toDataURL(url, { margin: 1, width, color: { dark: '#1a1c2c', light: '#f4f4f4' } })
+      .then(setQr)
+      .catch(() => setQr(null));
+  }, [url, width]);
+  return qr;
+}
+
 export const Lobby: React.FC<LobbyProps> = ({
   connected,
   roomCode,
@@ -72,31 +95,32 @@ export const Lobby: React.FC<LobbyProps> = ({
   onJoinRoom,
   onStartGame,
   onStartDemo,
+  onWatch,
+  options,
+  onOptions,
+  scores,
+  hardQuestions,
+  watchers,
 }) => {
-  const [tab, setTab] = useState<'create' | 'join'>(DEMO ? 'create' : 'join');
+  const [tab, setTab] = useState<'create' | 'join' | 'watch'>(DEMO ? 'create' : 'join');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [color, setColor] = useState(TIE_COLORS[Math.floor(Math.random() * TIE_COLORS.length)]);
-  const [qr, setQr] = useState<string | null>(null);
 
   const inRoom = Boolean(roomCode);
   const isHost = inRoom && selfPlayerId === hostId;
   const canStart = isHost && players.length >= CONSTANTS.MIN_PLAYERS_TO_START;
   const joinUrl = useJoinUrl(isHost && !DEMO);
 
-  useEffect(() => {
-    if (!joinUrl) {
-      setQr(null);
-      return;
-    }
-    QRCode.toDataURL(joinUrl, { margin: 1, width: 200, color: { dark: '#1a1c2c', light: '#f4f4f4' } })
-      .then(setQr)
-      .catch(() => setQr(null));
-  }, [joinUrl]);
+  const qr = useQr(joinUrl);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
+    if (tab === 'watch') {
+      if (code.trim().length === 4 && connected) onWatch(code.trim().toUpperCase());
+      return;
+    }
     if (!trimmed || !connected) return;
     if (tab === 'create') onCreateRoom(trimmed, color);
     else if (code.trim().length === 4) onJoinRoom(code.trim().toUpperCase(), trimmed, color);
@@ -107,12 +131,12 @@ export const Lobby: React.FC<LobbyProps> = ({
       <div className="mx-auto flex min-h-full w-full max-w-xl flex-col items-center justify-center gap-5 px-4 py-5">
         <div className="text-center">
           <h1 className="px-title flex items-center justify-center gap-3 text-xl leading-snug text-px-yellow md:text-3xl">
-            <PixelIcon name="bomb" size={28} className="text-px-orange" />
-            <span>
+            <PixelIcon name="bomb" size={28} className="px-title-flicker text-px-orange" />
+            <span className="px-title-bob">
               FIZIKA <br className="md:hidden" />
               BOMBERMAN
             </span>
-            <PixelIcon name="bomb" size={28} className="text-px-orange" />
+            <PixelIcon name="bomb" size={28} className="px-title-flicker text-px-orange" />
           </h1>
           <p className="mt-3 text-2xl text-px-cyan">{HU.subtitle}</p>
           <p className="text-lg text-px-silver">{HU.gradeLevel}</p>
@@ -129,7 +153,7 @@ export const Lobby: React.FC<LobbyProps> = ({
           {!inRoom ? (
             <>
               <div className="mb-4 flex gap-2">
-                {DEMO ? null : (['join', 'create'] as const).map((t) => (
+                {DEMO ? null : (['join', 'create', 'watch'] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -137,27 +161,30 @@ export const Lobby: React.FC<LobbyProps> = ({
                     className="px-btn flex flex-1 items-center justify-center gap-2 !px-1 !text-[9px]"
                     style={{ ['--btn' as string]: tab === t ? '#ffcd75' : '#566c86' }}
                   >
-                    <PixelIcon name={t === 'join' ? 'key' : 'plus'} size={12} />
-                    {t === 'join' ? HU.lobby.joinRoomTab : HU.lobby.createRoomTab}
+                    <PixelIcon name={t === 'join' ? 'key' : t === 'create' ? 'plus' : 'map'} size={12} />
+                    {t === 'join' ? HU.lobby.joinRoomTab : t === 'create' ? HU.lobby.createRoomTab : HU.lobby.watchTab}
                   </button>
                 ))}
               </div>
 
               <form onSubmit={submit} className="flex flex-col gap-4">
-                <label className="flex flex-col gap-1 text-xl text-px-silver">
-                  {tab === 'create' ? HU.lobby.hostNameLabel : HU.lobby.playerNameLabel}
-                  <input
-                    type="text"
-                    required
-                    maxLength={14}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    autoComplete="off"
-                    className="px-input"
-                  />
-                </label>
+                {tab === 'watch' && <p className="text-lg text-px-silver">{HU.lobby.watchHint}</p>}
+                {tab !== 'watch' && (
+                  <label className="flex flex-col gap-1 text-xl text-px-silver">
+                    {tab === 'create' ? HU.lobby.hostNameLabel : HU.lobby.playerNameLabel}
+                    <input
+                      type="text"
+                      required
+                      maxLength={14}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      autoComplete="off"
+                      className="px-input"
+                    />
+                  </label>
+                )}
 
-                {tab === 'join' && (
+                {(tab === 'join' || tab === 'watch') && (
                   <label className="flex flex-col gap-1 text-xl text-px-silver">
                     {HU.lobby.roomCodeLabel}
                     <input
@@ -174,6 +201,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                   </label>
                 )}
 
+                {tab !== 'watch' && (
                 <div className="flex flex-col gap-2 text-xl text-px-silver">
                   {HU.lobby.chooseColor}
                   <div className="px-inset flex flex-wrap gap-2.5 p-2.5">
@@ -189,10 +217,11 @@ export const Lobby: React.FC<LobbyProps> = ({
                     ))}
                   </div>
                 </div>
+                )}
 
                 {!DEMO && (
                   <button type="submit" disabled={!connected} className="px-btn !py-4">
-                    {tab === 'create' ? HU.lobby.createRoomBtn : HU.lobby.joinRoomBtn}
+                    {tab === 'create' ? HU.lobby.createRoomBtn : tab === 'watch' ? HU.lobby.watchBtn : HU.lobby.joinRoomBtn}
                   </button>
                 )}
                 {tab === 'create' && (
@@ -257,6 +286,21 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </div>
               </div>
 
+              {isHost && !DEMO && (
+                <a
+                  href={`${window.location.origin}/?watch=${roomCode}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-btn flex items-center justify-center gap-2 !text-[9px]"
+                  style={{ ['--btn' as string]: '#41a6f6' }}
+                >
+                  <PixelIcon name="map" size={12} /> {HU.lobby.projectorLink}
+                </a>
+              )}
+              {isHost && watchers > 0 && <p className="text-center text-lg text-px-cyan">{HU.lobby.watchers(watchers)}</p>}
+
+              {isHost && <HostOptions options={options} onChange={onOptions} />}
+
               {isHost && (
                 <div className="px-inset flex flex-col gap-2 p-2.5">
                   <div className="flex items-center justify-between gap-2">
@@ -291,6 +335,19 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </div>
               ) : (
                 <div className="px-inset animate-pulse p-3 text-center text-xl text-px-silver">{HU.lobby.waitingForHost}</div>
+              )}
+
+              {scores.some((r) => !r.isBot) && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xl text-px-cyan">{HU.scores.title}</span>
+                  <Scoreboard scores={scores} highlightId={selfPlayerId} />
+                </div>
+              )}
+              {isHost && hardQuestions.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xl text-px-orange">{HU.scores.hardTitle}</span>
+                  <HardQuestions questions={hardQuestions} />
+                </div>
               )}
             </div>
           )}

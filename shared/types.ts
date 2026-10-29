@@ -13,6 +13,8 @@ export const enum TileType {
   PLAYER_WALL_CRACKED = 5, // a damaged player wall, breaks on the next explosion
 }
 
+export type Theme = 'lab' | 'space' | 'forest';
+
 export type PowerUpType = 'INVULNERABLE' | 'SPEED' | 'BIG_BLAST' | 'INFINITE_BOMBS';
 
 export interface PhysicsQuestion {
@@ -21,6 +23,7 @@ export interface PhysicsQuestion {
   options: [string, string, string, string];
   correctIndex: number;
   topic: string;
+  category: string; // see QUESTION_CATEGORIES (the host can limit a match to some of them)
   explanation: string;
 }
 
@@ -74,6 +77,8 @@ export interface Player {
   lives: number;
   hurtTimer: number; // brief protection after losing a life
   kills: number;
+  correctAnswers: number;
+  wrongAnswers: number;
   deathTime: number | null; // matchTime when the player died
   killedBy: { name: string; color: string } | null; // who knocked this player out
   diedFromStorm: boolean;
@@ -148,6 +153,9 @@ export interface GameState {
   questionSpawnTimer: number;
   feed: FeedEntry[]; // recent hits and knock-outs, newest last
   feedCounter: number;
+  theme: Theme;
+  categories: string[]; // question categories in play (empty = all)
+  quizLog: Array<{ questionId: number; correct: boolean }>; // every answer, for the class statistics
   win: WinState;
 }
 

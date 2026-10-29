@@ -121,3 +121,36 @@
     text-shadow: 3px 3px 0 #000;
   }
 }
+
+/* Retro motion: title bounce, flickering bombs, podium that rises step by step */
+@keyframes px-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes px-flicker {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 1; }
+  50% { opacity: 0.35; }
+  55% { opacity: 1; }
+}
+@keyframes px-rise {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes px-pop {
+  0% { transform: translateY(14px) scale(0.5); opacity: 0; }
+  70% { transform: translateY(-6px) scale(1.05); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes px-hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.px-title-bob { animation: px-bob 1.2s steps(4, end) infinite; }
+.px-title-flicker { animation: px-flicker 1.6s steps(1, end) infinite; }
+.px-podium-step { transform-origin: bottom; animation: px-rise 0.5s steps(6, end) both; }
+.px-podium-pop { animation: px-pop 0.5s steps(6, end) both; }
+.px-podium-hop { animation: px-hop 0.7s steps(4, end) infinite; animation-delay: 1.8s; }
+@media (prefers-reduced-motion: reduce) {
+  .px-title-bob, .px-title-flicker, .px-podium-hop { animation: none; }
+}

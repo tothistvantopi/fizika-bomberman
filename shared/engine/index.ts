@@ -14,6 +14,7 @@ import {
   PlayerInput,
   PowerUpType,
   RankEntry,
+  Theme,
   TileType,
 } from '../types.js';
 import { generateMap } from './map.js';
@@ -29,6 +30,8 @@ import { RNG } from './rng.js';
 export interface CreateGameOptions {
   seed: number;
   players: Array<{ id: string; name: string; color: string; playerNumber: number }>;
+  theme?: Theme;
+  categories?: string[]; // limit the questions to these categories (empty/undefined = all)
 }
 
 export interface SoundEvent {
@@ -85,6 +88,8 @@ export function createGame(options: CreateGameOptions, rng: RNG): GameState {
       lives: CONSTANTS.PLAYER_LIVES,
       hurtTimer: 0,
       kills: 0,
+      correctAnswers: 0,
+      wrongAnswers: 0,
       deathTime: null,
       killedBy: null,
       diedFromStorm: false,
@@ -116,6 +121,9 @@ export function createGame(options: CreateGameOptions, rng: RNG): GameState {
     questionSpawnTimer: CONSTANTS.QUESTION_RESPAWN_SECONDS,
     feed: [],
     feedCounter: 0,
+    theme: options.theme ?? 'lab',
+    categories: options.categories ?? [],
+    quizLog: [],
     win: { over: false, reason: '', ranking: [] },
   };
 }
@@ -292,12 +300,20 @@ export function placeWall(state: GameState, playerId: string): boolean {
   return true;
 }
 
+/** The questions of this match: all of them, or only the categories the teacher picked. */
+function questionPool(state: GameState): typeof PHYSICS_QUESTIONS {
+  if (state.categories.length === 0) return PHYSICS_QUESTIONS;
+  const filtered = PHYSICS_QUESTIONS.filter((q) => state.categories.includes(q.category));
+  return filtered.length > 0 ? filtered : PHYSICS_QUESTIONS;
+}
+
 function startQuiz(state: GameState, player: Player, tileIndex: number, rng: RNG): void {
   const seen = new Set(player.seenQuestionIds);
-  let available = PHYSICS_QUESTIONS.filter((q) => !seen.has(q.id));
+  const pool = questionPool(state);
+  let available = pool.filter((q) => !seen.has(q.id));
   if (available.length === 0) {
     seen.clear();
-    available = PHYSICS_QUESTIONS;
+    available = pool;
   }
   const question = rng.choice(available);
   seen.add(question.id);
@@ -342,6 +358,9 @@ function finishQuiz(state: GameState, player: Player, answerIndex: number, rng: 
   const correct = answerIndex >= 0 && player.quizOptionsShuffled[answerIndex] === correctAnswer;
   const reward = correct ? rng.choice(POWER_UPS) : null;
   if (reward) applyPowerUp(player, reward);
+  if (correct) player.correctAnswers++;
+  else player.wrongAnswers++;
+  state.quizLog.push({ questionId: question.id, correct });
 
   player.lastQuizResult = {
     seq: (player.lastQuizResult?.seq ?? 0) + 1,

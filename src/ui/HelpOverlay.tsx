@@ -10,10 +10,12 @@ import { PixelIcon } from './PixelIcon.js';
 interface Props {
   isMuted: boolean;
   onToggleMute: () => void;
+  musicOn: boolean;
+  onToggleMusic: () => void;
   onClose: () => void;
 }
 
-export const HelpOverlay: React.FC<Props> = ({ isMuted, onToggleMute, onClose }) => {
+export const HelpOverlay: React.FC<Props> = ({ isMuted, onToggleMute, musicOn, onToggleMusic, onClose }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'KeyP' || e.code === 'Escape') onClose();
@@ -32,6 +34,9 @@ export const HelpOverlay: React.FC<Props> = ({ isMuted, onToggleMute, onClose })
         <HowToPlay compact />
         <button onClick={onToggleMute} className="px-btn flex items-center justify-center gap-2 !text-[9px]" style={{ ['--btn' as string]: isMuted ? '#b13e53' : '#38b764' }}>
           <PixelIcon name={isMuted ? 'mute' : 'sound'} size={14} /> {isMuted ? HU.help.unmute : HU.help.mute}
+        </button>
+        <button onClick={onToggleMusic} className="px-btn flex items-center justify-center gap-2 !text-[9px]" style={{ ['--btn' as string]: musicOn ? '#38b764' : '#566c86' }}>
+          <PixelIcon name="sound" size={14} /> {musicOn ? HU.help.musicOn : HU.help.musicOff}
         </button>
       </div>
     </div>

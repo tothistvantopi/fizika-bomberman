@@ -409,6 +409,41 @@ describe('Question bank', () => {
   });
 });
 
+describe('Question topics and themes', () => {
+  it('only asks questions from the chosen categories', () => {
+    const { state, rng } = newGame(2);
+    state.categories = ['newton'];
+    arena(state, { p1: [5, 5], p2: [30, 25] });
+    const asked = new Set<string>();
+    for (let i = 0; i < 25; i++) {
+      state.tiles[5 * state.mapWidth + 5] = TileType.QUESTION_TILE;
+      state.players.p1.inQuiz = false;
+      state.players.p1.x = 5 * 16 + 8 - 16;
+      step(state, { p1: { dx: 1, dy: 0 } }, DT, rng);
+      for (let t = 0; t < 12 && !state.players.p1.inQuiz; t++) step(state, { p1: { dx: 1, dy: 0 } }, DT, rng);
+      const q = state.players.p1.quizQuestion;
+      if (q) asked.add(q.category);
+      applyAction(state, 'p1', { type: 'quiz_answer', answerIndex: 0 }, rng);
+      state.players.p1.seenQuestionIds = [];
+    }
+    expect(asked.size).toBeGreaterThan(0);
+    expect([...asked]).toEqual(['newton']);
+  });
+
+  it('tracks right and wrong answers per player', () => {
+    const { state, rng } = newGame(2);
+    arena(state, { p1: [5, 5], p2: [30, 25] });
+    state.tiles[5 * state.mapWidth + 5] = TileType.QUESTION_TILE;
+    step(state, {}, DT, rng);
+    const p = state.players.p1;
+    const correct = p.quizOptionsShuffled!.indexOf(p.quizQuestion!.options[p.quizQuestion!.correctIndex]);
+    applyAction(state, 'p1', { type: 'quiz_answer', answerIndex: correct }, rng);
+    expect(p.correctAnswers).toBe(1);
+    expect(p.wrongAnswers).toBe(0);
+    expect(state.quizLog).toEqual([{ questionId: expect.any(Number), correct: true }]);
+  });
+});
+
 describe('Shrinking zone', () => {
   it('collapses edges into solid walls that match the new safe area', () => {
     const { state, rng } = newGame(2);

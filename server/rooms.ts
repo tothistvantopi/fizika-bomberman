@@ -5,19 +5,21 @@
 
 import { WebSocket } from 'ws';
 import { CONSTANTS } from '../shared/constants.js';
+import { PHYSICS_QUESTIONS, QUESTION_CATEGORIES } from '../shared/data/questions.js';
 import { applyAction, createGame, EngineEvents, step } from '../shared/engine/index.js';
 import { createRNG, RNG } from '../shared/engine/rng.js';
 import { BOT_COLORS, BOT_NAMES, BotBrain, buildWorld, createBotBrain, thinkBot } from './bots.js';
 import {
   BotLevel,
   ClientMessage,
-  GameSnapshot,
+  HardQuestion,
   LobbyPlayer,
+  RoomOptions,
+  ScoreRow,
   ServerMessage,
-  SnapshotPlayer,
-  SnapshotSelfData,
 } from '../shared/protocol.js';
-import { GameState, PlayerInput } from '../shared/types.js';
+import { GameState, PlayerInput, Theme } from '../shared/types.js';
+import { emptyWireSelf, encodeShared, RosterEntry, WireSelf } from '../shared/wire.js';
 
 export interface ConnectedClient {
   ws: WebSocket;
@@ -29,6 +31,16 @@ export interface ConnectedClient {
   lastInputTimestamp: number;
   inputMessageCount: number;
   lastTilesVersion: number; // last tile map version sent to this client (-1 = none)
+  lastFeedId: number; // newest kill-feed entry this client has already received
+  lastResultSeq: number; // newest quiz result this client has already received
+}
+
+/** A projector view: sees the whole match, never plays. */
+export interface Spectator {
+  id: string;
+  ws: WebSocket;
+  lastTilesVersion: number;
+  lastFeedId: number;
 }
 
 export interface BotSlot {
@@ -50,6 +62,13 @@ export interface Room {
   botSlots: BotSlot[]; // computer players that join the next game
   botLevel: BotLevel;
   botBrains: Record<string, BotBrain>;
+  options: RoomOptions;
+  scores: Map<string, ScoreRow>; // class leaderboard, adds up over the matches of this room
+  questionStats: Map<number, { asked: number; correct: number }>;
+  roster: RosterEntry[]; // who is in the current match (snapshots refer to players by index)
+  rosterIndex: Map<string, number>;
+  spectators: Map<string, Spectator>;
+  reported: boolean; // the match report of the current game was already sent
   tickInterval?: NodeJS.Timeout;
   tickAccumulatorMs: number; // real time not yet simulated
   lastTickAt: number;
@@ -97,6 +116,8 @@ export class RoomManager {
       lastInputTimestamp: Date.now(),
       inputMessageCount: 0,
       lastTilesVersion: -1,
+      lastFeedId: 0,
+      lastResultSeq: 0,
     };
   }
 
@@ -114,6 +135,13 @@ export class RoomManager {
       botSlots: [],
       botLevel: 'normal',
       botBrains: {},
+      options: { theme: 'random', categories: [] },
+      scores: new Map(),
+      questionStats: new Map(),
+      roster: [],
+      rosterIndex: new Map(),
+      spectators: new Map(),
+      reported: false,
       tickAccumulatorMs: 0,
       lastTickAt: Date.now(),
       emptySince: null,
@@ -189,6 +217,13 @@ export class RoomManager {
 
   handleDisconnect(ws: WebSocket): { room: Room; client: ConnectedClient } | null {
     for (const room of this.rooms.values()) {
+      for (const [id, spectator] of room.spectators) {
+        if (spectator.ws === ws) {
+          room.spectators.delete(id);
+          if (!room.state) this.broadcastLobby(room);
+          return null;
+        }
+      }
       for (const [playerId, client] of room.clients) {
         if (client.ws !== ws) continue;
 
@@ -257,7 +292,11 @@ export class RoomManager {
       ...Array.from(room.clients.values()).map((c) => ({ id: c.playerId, name: c.name, color: c.color, playerNumber: c.playerNumber })),
       ...room.botSlots,
     ];
-    room.state = createGame({ seed: Date.now(), players }, room.rng);
+    const theme: Theme = room.options.theme === 'random' ? room.rng.choice<Theme>(['lab', 'space', 'forest']) : room.options.theme;
+    room.state = createGame({ seed: Date.now(), players, theme, categories: room.options.categories }, room.rng);
+    room.reported = false;
+    room.roster = Object.values(room.state.players).map((p) => ({ id: p.id, name: p.name, color: p.color, playerNumber: p.playerNumber }));
+    room.rosterIndex = new Map(room.roster.map((r, i) => [r.id, i]));
     room.botBrains = Object.fromEntries(room.botSlots.map((b) => [b.id, createBotBrain(room.botLevel)]));
     // Optional shorter matches, e.g. MATCH_SECONDS=120 npm start (never longer than 5 minutes)
     const limit = Number(typeof process !== 'undefined' ? process.env.MATCH_SECONDS : 0);
@@ -266,6 +305,7 @@ export class RoomManager {
     room.pendingActions = {};
 
     for (const client of room.clients.values()) this.sendGameInit(room, client);
+    for (const spectator of room.spectators.values()) this.sendSpectatorInit(room, spectator);
 
     if (room.tickInterval) clearInterval(room.tickInterval);
     room.tickAccumulatorMs = 0;
@@ -278,7 +318,45 @@ export class RoomManager {
     const state = room.state;
     if (!state) return;
     client.lastTilesVersion = state.tilesVersion;
-    this.send(client, { type: 'game_init', tiles: state.tiles, width: state.mapWidth, height: state.mapHeight });
+    client.lastFeedId = 0;
+    client.lastResultSeq = 0;
+    this.send(client, this.initMessage(room, state));
+  }
+
+  private initMessage(room: Room, state: GameState): ServerMessage {
+    return {
+      type: 'game_init',
+      tiles: state.tiles,
+      width: state.mapWidth,
+      height: state.mapHeight,
+      theme: state.theme,
+      roster: room.roster,
+    };
+  }
+
+  private sendSpectatorInit(room: Room, spectator: Spectator): void {
+    const state = room.state;
+    if (!state) return;
+    spectator.lastTilesVersion = state.tilesVersion;
+    spectator.lastFeedId = 0;
+    this.sendTo(spectator.ws, this.initMessage(room, state));
+  }
+
+  /** Projector view: follow a room without joining the game. */
+  watchRoom(roomCode: string, ws: WebSocket): { room: Room; spectator: Spectator } | { error: string } {
+    const room = this.rooms.get(roomCode.toUpperCase());
+    if (!room) return { error: 'A megadott szobakód nem létezik!' };
+    if (room.spectators.size >= 4) return { error: 'Egy szobához legfeljebb 4 kivetítő csatlakozhat.' };
+    const spectator: Spectator = { id: randomId('w_'), ws, lastTilesVersion: -1, lastFeedId: 0 };
+    room.spectators.set(spectator.id, spectator);
+    this.sendTo(ws, { type: 'room_watching', roomCode: room.code });
+    if (room.state) {
+      this.sendSpectatorInit(room, spectator);
+      this.broadcastSnapshots(room);
+    } else {
+      this.broadcastLobby(room);
+    }
+    return { room, spectator };
   }
 
   /** Runs as many fixed simulation steps as real time has passed, then sends one snapshot. */
@@ -306,9 +384,10 @@ export class RoomManager {
     this.sendSounds(room, events);
     this.broadcastSnapshots(room);
 
-    if (state.win.over && room.tickInterval) {
-      clearInterval(room.tickInterval); // final snapshot was sent
+    if (state.win.over) {
+      if (room.tickInterval) clearInterval(room.tickInterval); // final snapshot was sent
       room.tickInterval = undefined;
+      this.finishMatch(room, state);
     }
   }
 
@@ -365,70 +444,120 @@ export class RoomManager {
     const state = room.state;
     if (!state) return;
 
-    const players: SnapshotPlayer[] = Object.values(state.players).map((p) => ({
-      id: p.id,
-      playerNumber: p.playerNumber,
-      name: p.name,
-      color: p.color,
-      x: p.x,
-      y: p.y,
-      facing: p.facing,
-      alive: p.alive,
-      connected: p.connected,
-      inQuiz: p.inQuiz,
-      invulnerable: p.invulnerableTimer > 0,
-      fast: p.speedTimer > 0,
-      hurt: p.hurtTimer > 0,
-      lives: p.lives,
-      kills: p.kills,
-    }));
-    const bombs = state.bombs.map((b) => ({ id: b.id, tileX: b.tileX, tileY: b.tileY, timer: b.timer, range: b.range, ownerId: b.ownerId }));
-    const recentFeed = state.feed.filter((f) => state.matchTime - f.time <= CONSTANTS.FEED_VISIBLE_SECONDS);
-    const explosions = state.explosions.map((e) => ({ tileX: e.tileX, tileY: e.tileY, timer: e.timer }));
+    // Everything that is the same for all clients is turned into JSON only once
+    const sharedJson = JSON.stringify(encodeShared(state, room.roster, room.rosterIndex));
+    const head = '{"type":"snapshot","data":' + sharedJson.slice(0, -1);
+    const newestFeed = state.feed.length > 0 ? state.feed[state.feed.length - 1].id : 0;
+    const r1 = (n: number) => Math.round(n * 10);
 
     for (const client of room.clients.values()) {
       const me = state.players[client.playerId];
       if (!me) continue;
 
-      const self: SnapshotSelfData = {
-        inQuiz: me.inQuiz,
-        quizPrompt: me.quizQuestion?.prompt ?? null,
-        quizTopic: me.quizQuestion?.topic ?? null,
-        quizOptions: me.quizOptionsShuffled,
-        quizTimer: me.quizTimer,
-        quizResult: me.lastQuizResult,
-        killedBy: me.killedBy,
-        diedFromStorm: me.diedFromStorm,
-        kx: Math.round(me.kx * 10) / 10,
-        ky: Math.round(me.ky * 10) / 10,
-        maxBombs: me.maxBombs,
-        bombsOut: state.bombs.filter((b) => b.ownerId === me.id).length,
-        wallStock: me.wallStock,
-        maxWalls: CONSTANTS.WALL_MAX_STOCK,
-        invulnerableTimer: me.invulnerableTimer,
-        speedTimer: me.speedTimer,
-        bigBlastTimer: me.bigBlastTimer,
-        infiniteBombsTimer: me.infiniteBombsTimer,
+      const self: WireSelf = {
+        a: [
+          r1(me.kx),
+          r1(me.ky),
+          me.maxBombs,
+          state.bombs.reduce((n, b) => n + (b.ownerId === me.id ? 1 : 0), 0),
+          me.wallStock,
+          r1(me.invulnerableTimer),
+          r1(me.speedTimer),
+          r1(me.bigBlastTimer),
+          r1(me.infiniteBombsTimer),
+        ],
       };
+      if (me.inQuiz && me.quizQuestion && me.quizOptionsShuffled) {
+        self.z = [me.quizQuestion.prompt, me.quizQuestion.topic, me.quizOptionsShuffled, r1(me.quizTimer)];
+      }
+      if (me.lastQuizResult && me.lastQuizResult.seq !== client.lastResultSeq) {
+        self.r = me.lastQuizResult;
+        client.lastResultSeq = me.lastQuizResult.seq;
+      }
+      if (me.killedBy) self.u = me.killedBy;
+      if (me.diedFromStorm) self.d = 1;
 
-      const snapshot: GameSnapshot = {
-        tick: state.tick,
-        status: state.status,
-        countdown: state.countdown,
-        matchTime: state.matchTime,
-        maxMatchTime: state.maxMatchTime,
-        safeZone: state.safeZone,
-        players,
-        tiles: client.lastTilesVersion !== state.tilesVersion ? state.tiles : undefined,
-        bombs,
-        explosions,
-        feed: recentFeed,
-        win: state.win,
-        self,
-      };
-      client.lastTilesVersion = state.tilesVersion;
-      this.send(client, { type: 'snapshot', data: snapshot });
+      let extras = ',"q":' + JSON.stringify(self);
+      const newFeed = state.feed.filter((f) => f.id > client.lastFeedId);
+      if (newFeed.length > 0) {
+        extras += ',"f":' + JSON.stringify(newFeed);
+        client.lastFeedId = newestFeed;
+      }
+      if (client.lastTilesVersion !== state.tilesVersion) {
+        extras += ',"t":' + JSON.stringify(state.tiles);
+        client.lastTilesVersion = state.tilesVersion;
+      }
+      this.sendRaw(client.ws, head + extras + '}}');
     }
+
+    for (const spectator of room.spectators.values()) {
+      let extras = ',"q":' + JSON.stringify(emptyWireSelf());
+      const newFeed = state.feed.filter((f) => f.id > spectator.lastFeedId);
+      if (newFeed.length > 0) {
+        extras += ',"f":' + JSON.stringify(newFeed);
+        spectator.lastFeedId = newestFeed;
+      }
+      if (spectator.lastTilesVersion !== state.tilesVersion) {
+        extras += ',"t":' + JSON.stringify(state.tiles);
+        spectator.lastTilesVersion = state.tilesVersion;
+      }
+      this.sendRaw(spectator.ws, head + extras + '}}');
+    }
+  }
+
+  /** Class leaderboard and statistics once a match is over. */
+  private finishMatch(room: Room, state: GameState): void {
+    if (room.reported) return;
+    room.reported = true;
+
+    const gained: Record<string, number> = {};
+    for (const entry of state.win.ranking) {
+      const player = state.players[entry.playerId];
+      if (!player) continue;
+      const placement = entry.rank === 1 ? 10 : entry.rank === 2 ? 7 : entry.rank === 3 ? 5 : 3;
+      const points = placement + player.kills + player.correctAnswers;
+      gained[player.id] = points;
+
+      const row =
+        room.scores.get(player.id) ??
+        ({ id: player.id, name: player.name, color: player.color, isBot: player.id.startsWith('bot_'), points: 0, wins: 0, games: 0, kills: 0, correct: 0, wrong: 0 } as ScoreRow);
+      row.name = player.name;
+      row.color = player.color;
+      row.points += points;
+      row.wins += entry.rank === 1 ? 1 : 0;
+      row.games += 1;
+      row.kills += player.kills;
+      row.correct += player.correctAnswers;
+      row.wrong += player.wrongAnswers;
+      room.scores.set(player.id, row);
+    }
+    for (const log of state.quizLog) {
+      const stat = room.questionStats.get(log.questionId) ?? { asked: 0, correct: 0 };
+      stat.asked++;
+      if (log.correct) stat.correct++;
+      room.questionStats.set(log.questionId, stat);
+    }
+    this.broadcast(room, { type: 'match_report', scores: this.scoreList(room), gained, hardQuestions: this.hardQuestions(room) });
+  }
+
+  private scoreList(room: Room): ScoreRow[] {
+    return [...room.scores.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || b.kills - a.kills);
+  }
+
+  /** The questions most players got wrong (asked at least twice, below ~65% correct). */
+  private hardQuestions(room: Room): HardQuestion[] {
+    const rows: Array<HardQuestion & { ratio: number }> = [];
+    for (const [id, stat] of room.questionStats) {
+      const question = PHYSICS_QUESTIONS.find((q) => q.id === id);
+      if (!question || stat.asked < 2) continue;
+      const ratio = stat.correct / stat.asked;
+      if (ratio > 0.65) continue;
+      rows.push({ prompt: question.prompt, correctAnswer: question.options[question.correctIndex], asked: stat.asked, correct: stat.correct, ratio });
+    }
+    return rows
+      .sort((a, b) => a.ratio - b.ratio || b.asked - a.asked)
+      .slice(0, 5)
+      .map(({ ratio: _ratio, ...rest }) => rest);
   }
 
   /** Sends the current snapshot right away (e.g. to a player who just reconnected). */
@@ -448,18 +577,36 @@ export class RoomManager {
       })),
       ...room.botSlots.map((b) => ({ id: b.id, playerNumber: b.playerNumber, name: b.name, color: b.color, isHost: false, isBot: true })),
     ];
-    this.broadcast(room, { type: 'lobby_update', roomCode: room.code, hostId: room.hostId, players, botLevel: room.botLevel });
+    this.broadcast(room, {
+      type: 'lobby_update',
+      roomCode: room.code,
+      hostId: room.hostId,
+      players,
+      botLevel: room.botLevel,
+      options: room.options,
+      scores: this.scoreList(room),
+      hardQuestions: this.hardQuestions(room),
+      watchers: room.spectators.size,
+    });
   }
 
   private send(client: ConnectedClient, msg: ServerMessage): void {
-    if (client.ws.readyState === WebSocket.OPEN) client.ws.send(JSON.stringify(msg));
+    this.sendTo(client.ws, msg);
   }
 
+  private sendTo(ws: WebSocket, msg: ServerMessage): void {
+    this.sendRaw(ws, JSON.stringify(msg));
+  }
+
+  private sendRaw(ws: WebSocket, payload: string): void {
+    if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+  }
+
+  /** To all players and projector views of the room. */
   broadcast(room: Room, msg: ServerMessage): void {
     const payload = JSON.stringify(msg);
-    for (const client of room.clients.values()) {
-      if (client.ws.readyState === WebSocket.OPEN) client.ws.send(payload);
-    }
+    for (const client of room.clients.values()) this.sendRaw(client.ws, payload);
+    for (const spectator of room.spectators.values()) this.sendRaw(spectator.ws, payload);
   }
 
   handleClientAction(room: Room, client: ConnectedClient, msg: ClientMessage): void {
@@ -472,6 +619,16 @@ export class RoomManager {
       case 'back_to_lobby':
         this.resetToLobby(room, client.playerId);
         return;
+      case 'set_options': {
+        if (room.state || room.hostId !== client.playerId) return;
+        if (msg.theme) room.options.theme = msg.theme;
+        if (msg.categories) {
+          const known = new Set(QUESTION_CATEGORIES.map((c) => c.id));
+          room.options.categories = msg.categories.filter((c) => known.has(c));
+        }
+        this.broadcastLobby(room);
+        return;
+      }
       case 'add_bot':
       case 'remove_bot':
       case 'bot_level': {

@@ -48,6 +48,38 @@ export const HU = {
     botBadge: 'BOT',
     joinAt: 'Csatlakozás a diákoknak (ugyanazon a Wi-Fin):',
     connecting: 'Csatlakozás a szerverhez...',
+    watchTab: 'Kivetítő',
+    watchBtn: 'Kivetítő nézet indítása',
+    watchHint: 'A tanári gép vetítőjére: a teljes pálya, élő ranglista és az osztály pontjai. Nem játékos, csak néző.',
+    optionsTitle: 'Meccs beállításai',
+    themeLabel: 'Pálya témája:',
+    themes: { random: 'Véletlen', lab: 'Labor', space: 'Űr', forest: 'Erdő' } as Record<string, string>,
+    topicsLabel: 'Kérdések témái:',
+    topicsAll: 'Minden téma',
+    projectorLink: 'Kivetítő nézet megnyitása új lapon',
+    watchers: (n: number) => `Kivetítő csatlakozva: ${n}`,
+  },
+
+  scores: {
+    title: 'Osztály ranglistája',
+    howPoints: 'Pont: helyezés (10/7/5/3) + kiütések + jó válaszok',
+    empty: 'Az első meccs után itt jelennek meg az osztály pontjai.',
+    gained: (n: number) => `+${n}`,
+    wins: 'Győzelem',
+    correct: 'Jó válasz',
+    hardTitle: 'Ezt érdemes még átbeszélni',
+    hardEmpty: 'Még nincs olyan kérdés, amit sokan elrontottak.',
+    hardStat: (c: number, a: number) => `${c}/${a} jó válasz`,
+    answerWas: 'Helyes válasz:',
+  },
+
+  projector: {
+    live: 'ÉLŐ RANGLISTA',
+    joinHere: 'Csatlakozás a telefonokról:',
+    code: 'Szobakód',
+    waiting: 'Várakozás a játék indítására...',
+    alive: 'Életben',
+    out: 'Kiesett',
   },
 
   quiz: {
@@ -110,6 +142,8 @@ export const HU = {
     close: 'Bezárás',
     mute: 'Hang némítása',
     unmute: 'Hang bekapcsolása',
+    musicOn: 'Zene: be (kapcsold ki)',
+    musicOff: 'Zene: ki (kapcsold be)',
   },
 
   mobile: {

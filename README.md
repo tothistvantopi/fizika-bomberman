@@ -13,6 +13,7 @@ Egy gépen fut a szerver (például a tanár laptopján), a diákok **telefonró
 - [Gyors indítás](#gyors-indítás)
 - [Óra menete a tanári gépen](#óra-menete-a-tanári-gépen)
 - [Szabályok és irányítás](#szabályok-és-irányítás)
+- [Tanári eszközök](#tanári-eszközök)
 - [Számítógépes ellenfelek (botok)](#számítógépes-ellenfelek-botok)
 - [Hálózat, hibaelhárítás](#hálózat-hibaelhárítás)
 - [Beállítások](#beállítások)
@@ -94,8 +95,8 @@ Diákoknak:      http://192.168.1.23:3000
 | Fal építése | `F` | kék **FAL** gomb |
 | Térkép | `Q` | **TÉRKÉP** gomb |
 | Súgó | `P` | `?` gomb a felső sávban |
-| Hang ki/be | `M` | súgó ablak |
-| Kvíz válasz | `1` `2` `3` | koppintás a válaszra |
+| Hang ki/be | `M` | súgó ablak (a zenét külön is ki lehet kapcsolni) |
+| Kvíz válasz | `1` `2` `3` `4` | koppintás a válaszra |
 
 **Bomba:** 2 másodperc múlva kereszt alakban robban, a téglákat összetöri, a láncban lévő bombákat felrobbantja. A robbanás a könnyebb játékosokat messzebbre löki (Δv = J / m).
 
@@ -115,6 +116,20 @@ Diákoknak:      http://192.168.1.23:3000
 **Vége:** aki utoljára marad, nyer. Ha lejár az idő (5 perc), a túlélők közül a **több élet**, majd a **több kiütés** dönt. A kiesettek sorrendjében az utoljára kiesett a jobb helyezett.
 
 A kérdések a **7. osztályos kinematika és dinamika** témaköréből vannak (egyenletes és változó mozgás, gyorsulás, szabadesés, tehetetlenség, tömeg, erő, Newton törvényei, eredő erő, súrlódás, közegellenállás). A kérdések többsége helyzetelemzés (tipikus tévképzetekkel), négy válasszal, és a válaszok egyforma hosszúak, így a hosszából nem lehet kitalálni a jót. Elméleti és hétköznapi példás kérdések vannak, **számolás nincs**, és munka/energia sincs. A kérdések a `shared/data/questions.ts` fájlban vannak, könnyen bővíthetők.
+
+---
+
+## Tanári eszközök
+
+**Meccs beállításai (váróterem, csak a szobavezetőnek):**
+- **Pálya témája:** Labor, Űr vagy Erdő (vagy Véletlen). A téma csak a megjelenést változtatja, a játék ugyanaz.
+- **Kérdések témái:** hat témakör közül bekapcsolhatod, melyikből jöjjenek kérdések (pl. csak *Newton törvényei*). Alapból mind be van kapcsolva.
+
+**Osztály ranglistája:** a szoba pontjai több meccsen át összeadódnak. Pont: helyezés (1.: 10, 2.: 7, 3.: 5, a többiek: 3) + minden kiütés + minden jó válasz. A botok nem kerülnek a ranglistára. A ranglista a meccs végén és a váróteremben is látszik, és addig megmarad, amíg a szoba él.
+
+**„Ezt érdemes még átbeszélni”:** a meccs végén és a váróteremben megjelennek azok a kérdések, amelyeket legalább kétszer feltettek, és a válaszok kevesebb mint kétharmada volt helyes (a helyes válasszal együtt).
+
+**Kivetítő nézet:** a váróteremben a szobavezető a „Kivetítő nézet megnyitása új lapon” gombra kattint, vagy egy másik gépen a *Kivetítő* fülön adja meg a szobakódot (vagy megnyitja a `http://<cím>:3001/?watch=SZOBAKÓD` címet). A kivetítő nem játékos: a váróteremben nagy szobakódot és QR-kódot mutat, játék közben a **teljes pályát** és az élő ranglistát (életek, kiütések, idő), a végén a dobogót, az osztály pontjait és az átbeszélendő kérdéseket. Szobánként legfeljebb 4 kivetítő nézhet.
 
 ---
 
@@ -167,7 +182,7 @@ A repó két változatot tartalmaz ugyanabból a kódból:
 | Ellenfelek | csak gépi botok (te + 7 bot) | diákok + botok, max. 15 fő |
 | Parancs | `npm run build:demo` | `npm run host` |
 
-A demóhoz nem kell játékszerver: a játékmotor és a botok magában a böngészőben futnak, ezért a Vercel is kiszolgálja. A többjátékos módhoz a repót le kell tölteni (lásd **Gyors indítás**), mert ahhoz tartós WebSocket-szerver kell.
+A demóhoz nem kell játékszerver: a játékmotor és a botok magában a böngészőben futnak, ezért a Vercel is kiszolgálja. A többjátékos módhoz a repót le kell tölteni (lásd **Gyors indítás**), mert ahhoz tartós WebSocket-szerver kell. A demóban nincs kivetítő nézet és osztály-ranglista.
 
 **A demó közzététele a Vercelen:** a Vercelen válaszd az *Add New → Project* pontot, importáld ezt a repót, és hagyd meg a beállításokat: a `vercel.json` már megadja a build parancsot (`npm run build:demo`) és a kimeneti mappát (`dist-demo`).
 
@@ -209,6 +224,7 @@ server/bots.ts       a számítógépes ellenfelek
 shared/              a kliens és a szerver közös része
   constants.ts       a játék beállításai
   protocol.ts        üzenetek és ellenőrzésük
+  wire.ts            a kompakt (kisméretű) pillanatkép-formátum és dekódolása
   data/questions.ts  a fizikakérdések
   engine/            a játékszabályok (pálya, fizika, bombák, kvíz, rangsor) + tesztek
 src/                 a böngészős kliens (React, canvas, érintős vezérlők)
@@ -222,6 +238,6 @@ src/                 a böngészős kliens (React, canvas, érintős vezérlők)
 2. `git clone` this repository, then run `npm install` and `npm run host` (or double-click `INDITAS.command` on macOS / `INDITAS.bat` on Windows).
 3. The terminal prints the address for your players, e.g. `http://192.168.1.23:3000`. Open `http://localhost:3000` on the host computer, create a room and show the room code / QR code.
 4. Everybody else opens that address in a phone, tablet or laptop browser on the **same Wi-Fi**, enters a name and the 4-letter room code.
-5. Up to 15 players per room, 3 lives each, free-for-all, max. 5 minutes. Add computer opponents (easy/normal/hard) in the lobby. Question marks give physics questions (grade 7 kinematics & dynamics, Hungarian); correct answers give power-ups.
+5. Up to 15 players per room, 3 lives each, free-for-all, max. 5 minutes. Add computer opponents (easy/normal/hard) in the lobby. The host can also pick the arena theme (lab/space/forest) and the question topics, the room keeps a class leaderboard over several matches, and a projector view (`?watch=ROOMCODE`) shows the whole arena and a live ranking on the classroom screen. Question marks give physics questions (grade 7 kinematics & dynamics, Hungarian); correct answers give power-ups.
 
 If players cannot connect: check that the Wi-Fi does not isolate clients, allow incoming connections in the firewall, or use a phone hotspot.

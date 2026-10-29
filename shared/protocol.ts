@@ -2,9 +2,39 @@
  * Protocol messages and runtime validators between client and server.
  */
 
-import { FacingDirection, FeedEntry, QuizResultInfo, SafeZoneState, WinState } from './types.js';
+import { FacingDirection, FeedEntry, QuizResultInfo, SafeZoneState, Theme, WinState } from './types.js';
+import type { WireSnapshot } from './wire.js';
 
 export type BotLevel = 'easy' | 'normal' | 'hard';
+export type ThemeChoice = Theme | 'random';
+
+/** Match settings the host picks in the lobby. */
+export interface RoomOptions {
+  theme: ThemeChoice;
+  categories: string[]; // empty = all question categories
+}
+
+/** One row of the class leaderboard (points add up over the matches of a room). */
+export interface ScoreRow {
+  id: string;
+  name: string;
+  color: string;
+  isBot: boolean;
+  points: number;
+  wins: number;
+  games: number;
+  kills: number;
+  correct: number;
+  wrong: number;
+}
+
+/** A question that many players got wrong: the teacher may want to explain it again. */
+export interface HardQuestion {
+  prompt: string;
+  correctAnswer: string;
+  asked: number;
+  correct: number;
+}
 
 export type ClientMessage =
   | { type: 'create_room'; hostName: string; hostColor: string }
@@ -17,6 +47,8 @@ export type ClientMessage =
   | { type: 'add_bot' }
   | { type: 'remove_bot' }
   | { type: 'bot_level'; level: BotLevel }
+  | { type: 'set_options'; theme?: ThemeChoice; categories?: string[] }
+  | { type: 'watch'; roomCode: string } // projector view: follow a room without playing
   | { type: 'ping'; t: number };
 
 export interface SnapshotPlayer {
@@ -33,6 +65,8 @@ export interface SnapshotPlayer {
   invulnerable: boolean;
   fast: boolean;
   hurt: boolean; // blinking protection right after losing a life
+  blast: boolean; // big-blast power-up active
+  infinite: boolean; // infinite-bombs power-up active
   lives: number;
   kills: number;
 }
@@ -97,12 +131,34 @@ export type SoundName = 'bomb_place' | 'explosion' | 'quiz_correct' | 'quiz_wron
 export type ServerMessage =
   | { type: 'room_created'; roomCode: string; playerId: string; reconnectToken: string }
   | { type: 'room_joined'; roomCode: string; playerId: string; reconnectToken: string; isHost: boolean }
-  | { type: 'lobby_update'; roomCode: string; hostId: string; players: LobbyPlayer[]; botLevel: BotLevel }
-  | { type: 'game_init'; tiles: number[]; width: number; height: number }
-  | { type: 'snapshot'; data: GameSnapshot }
+  | { type: 'room_watching'; roomCode: string }
+  | {
+      type: 'lobby_update';
+      roomCode: string;
+      hostId: string;
+      players: LobbyPlayer[];
+      botLevel: BotLevel;
+      options: RoomOptions;
+      scores: ScoreRow[];
+      hardQuestions: HardQuestion[];
+      watchers: number;
+    }
+  | {
+      type: 'game_init';
+      tiles: number[];
+      width: number;
+      height: number;
+      theme: Theme;
+      roster: Array<{ id: string; name: string; color: string; playerNumber: number }>;
+    }
+  | { type: 'snapshot'; data: WireSnapshot }
+  | { type: 'match_report'; scores: ScoreRow[]; gained: Record<string, number>; hardQuestions: HardQuestion[] }
   | { type: 'sfx'; sound: SoundName }
   | { type: 'pong'; t: number }
   | { type: 'error'; message: string };
+
+/** What the client code sees: wire snapshots are expanded into full GameSnapshots. */
+export type AppMessage = Exclude<ServerMessage, { type: 'snapshot' }> | { type: 'snapshot'; data: GameSnapshot };
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -174,6 +230,17 @@ export function validateClientMessage(raw: unknown): ClientMessage | null {
       return { type: 'add_bot' };
     case 'remove_bot':
       return { type: 'remove_bot' };
+    case 'set_options': {
+      const theme = msg.theme === 'lab' || msg.theme === 'space' || msg.theme === 'forest' || msg.theme === 'random' ? msg.theme : undefined;
+      const categories = Array.isArray(msg.categories)
+        ? msg.categories.filter((c): c is string => typeof c === 'string').slice(0, 12).map((c) => c.slice(0, 20))
+        : undefined;
+      return { type: 'set_options', theme, categories };
+    }
+    case 'watch': {
+      if (typeof msg.roomCode !== 'string' || !msg.roomCode.trim()) return null;
+      return { type: 'watch', roomCode: msg.roomCode.trim().toUpperCase().slice(0, 6) };
+    }
     case 'bot_level':
       return msg.level === 'easy' || msg.level === 'normal' || msg.level === 'hard' ? { type: 'bot_level', level: msg.level } : null;
     case 'ping': {

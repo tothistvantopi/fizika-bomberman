@@ -55,6 +55,12 @@ export function setupGameServer(httpServer: HttpServer): { roomManager: RoomMana
           return;
         }
 
+        if (msg.type === 'watch') {
+          const res = roomManager.watchRoom(msg.roomCode, ws);
+          if ('error' in res) reply(ws, { type: 'error', message: res.error });
+          return;
+        }
+
         if (msg.type === 'join') {
           const res = roomManager.joinRoom(msg.roomCode, msg.name, msg.color, ws, msg.reconnectToken);
           if ('error' in res) {

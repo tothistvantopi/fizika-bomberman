@@ -3,10 +3,11 @@
  * and typed message dispatching.
  */
 
-import { ClientMessage, ServerMessage } from '@/shared/protocol.js';
+import { AppMessage, ClientMessage, ServerMessage } from '@/shared/protocol.js';
+import { MessageDecoder } from './decode.js';
 import { sfx } from '../audio/sfx.js';
 
-export type MessageHandler = (msg: ServerMessage) => void;
+export type MessageHandler = (msg: AppMessage) => void;
 export type ConnectionHandler = (connected: boolean) => void;
 export type PingHandler = (ms: number) => void;
 
@@ -27,6 +28,7 @@ export class NetworkClient {
   private pingTimer: number | null = null;
   private reconnectTimeout: number | null = null;
   private isManuallyClosed = false;
+  private decoder = new MessageDecoder();
   private session: Session | null = null;
   public playerId: string | null = null;
 
@@ -75,7 +77,8 @@ export class NetworkClient {
       }
       if (msg.type === 'sfx') sfx.play(msg.sound);
 
-      this.messageHandlers.forEach((h) => h(msg));
+      const decoded = this.decoder.decode(msg);
+      this.messageHandlers.forEach((h) => h(decoded));
     };
 
     ws.onclose = () => {

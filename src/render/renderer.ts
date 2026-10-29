@@ -5,10 +5,11 @@
 
 import { CONSTANTS } from '@/shared/constants.js';
 import { GameSnapshot } from '@/shared/protocol.js';
-import { TileType } from '@/shared/types.js';
+import { Theme, TileType } from '@/shared/types.js';
 import { Camera } from '../game/camera.js';
 import { InterpolatedPlayer } from '../game/interpolation.js';
-import { drawBomb, drawCachedTile, drawExplosionCell, drawHearts, drawPlayer } from './sprites.js';
+import { Effects } from './effects.js';
+import { drawBomb, drawCachedTile, drawExplosionCell, drawHearts, drawPlayer, drawPowerIcons, tileVariant } from './sprites.js';
 
 export interface RenderContext {
   ctx: CanvasRenderingContext2D;
@@ -21,6 +22,9 @@ export interface RenderContext {
   mapWidth: number;
   mapHeight: number;
   time: number;
+  theme?: Theme;
+  effects?: Effects;
+  predictedBombs?: Array<{ tileX: number; tileY: number; age: number }>; // bombs we placed that the server has not confirmed yet
 }
 
 const TILE = CONSTANTS.TILE_SIZE_PX;
@@ -40,10 +44,10 @@ const MAX_LAYER_PIXELS = 6_000_000;
  * when the server sends a new tile array (a brick breaks, a wall is built). Every frame is then a
  * single drawImage of the visible part, instead of ~600 tile copies.
  */
-function getStaticLayer(tiles: number[], mapWidth: number, mapHeight: number, pixelScale: number): StaticLayer {
+function getStaticLayer(tiles: number[], mapWidth: number, mapHeight: number, pixelScale: number, theme: Theme): StaticLayer {
   let scale = Math.min(4, Math.max(1, pixelScale));
   while (scale > 1 && mapWidth * mapHeight * TILE * TILE * scale * scale > MAX_LAYER_PIXELS) scale--;
-  const key = `${mapWidth}x${mapHeight}@${scale}`;
+  const key = `${mapWidth}x${mapHeight}@${scale}:${theme}`;
   if (staticLayer && staticLayer.tiles === tiles && staticLayer.key === key) return staticLayer;
 
   if (!staticLayer) staticLayer = { canvas: document.createElement('canvas'), scale, tiles: null, key: '', questionTiles: [] };
@@ -64,17 +68,18 @@ function getStaticLayer(tiles: number[], mapWidth: number, mapHeight: number, pi
       const tile = tiles[idx] ?? TileType.SOLID_WALL;
       const px = tx * TILE;
       const py = ty * TILE;
+      const roll = tileVariant(tx, ty);
       if (tile === TileType.SOLID_WALL) {
-        drawCachedTile(c, 'wall', px, py);
+        drawCachedTile(c, 'wall', px, py, theme, roll < 20 ? 1 : 0);
         continue;
       }
-      drawCachedTile(c, (tx + ty) % 2 === 0 ? 'floorA' : 'floorB', px, py);
-      if (tile === TileType.BREAKABLE_BRICK) drawCachedTile(c, 'brick', px, py);
+      drawCachedTile(c, (tx + ty) % 2 === 0 ? 'floorA' : 'floorB', px, py, theme, roll < 55 ? 0 : 1 + (roll % 3));
+      if (tile === TileType.BREAKABLE_BRICK) drawCachedTile(c, 'brick', px, py, theme, roll < 35 ? 1 : 0);
       else if (tile === TileType.QUESTION_TILE) {
-        drawCachedTile(c, 'question', px, py);
+        drawCachedTile(c, 'question', px, py, theme);
         layer.questionTiles.push(idx);
-      } else if (tile === TileType.PLAYER_WALL) drawCachedTile(c, 'playerWall', px, py);
-      else if (tile === TileType.PLAYER_WALL_CRACKED) drawCachedTile(c, 'playerWallCracked', px, py);
+      } else if (tile === TileType.PLAYER_WALL) drawCachedTile(c, 'playerWall', px, py, theme);
+      else if (tile === TileType.PLAYER_WALL_CRACKED) drawCachedTile(c, 'playerWallCracked', px, py, theme);
     }
   }
   return layer;
@@ -119,10 +124,12 @@ export function renderScene(rc: RenderContext): void {
   ctx.fillStyle = '#1a1c2c';
   ctx.fillRect(0, 0, camera.width, camera.height);
 
+  const shakeX = rc.effects?.shakeX ?? 0;
+  const shakeY = rc.effects?.shakeY ?? 0;
   ctx.save();
-  ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
+  ctx.translate(-Math.round(camera.x) + shakeX, -Math.round(camera.y) + shakeY);
 
-  const layer = getStaticLayer(tiles, mapWidth, mapHeight, pixelScale);
+  const layer = getStaticLayer(tiles, mapWidth, mapHeight, pixelScale, rc.theme ?? 'lab');
   const worldW = mapWidth * TILE;
   const worldH = mapHeight * TILE;
   const cx = Math.round(camera.x);
@@ -155,11 +162,12 @@ export function renderScene(rc: RenderContext): void {
   const zx1 = (zone.maxX + 1) * TILE;
   const zy0 = zone.minY * TILE;
   const zy1 = (zone.maxY + 1) * TILE;
+  // (the outermost wall ring is never tinted: it is not part of the arena)
   ctx.fillStyle = 'rgba(177, 62, 83, 0.55)';
-  if (zy0 > 0) ctx.fillRect(0, 0, worldW, zy0);
-  if (zy1 < worldH) ctx.fillRect(0, zy1, worldW, worldH - zy1);
-  if (zx0 > 0) ctx.fillRect(0, zy0, zx0, zy1 - zy0);
-  if (zx1 < worldW) ctx.fillRect(zx1, zy0, worldW - zx1, zy1 - zy0);
+  if (zy0 > TILE) ctx.fillRect(TILE, TILE, worldW - 2 * TILE, zy0 - TILE);
+  if (zy1 < worldH - TILE) ctx.fillRect(TILE, zy1, worldW - 2 * TILE, worldH - TILE - zy1);
+  if (zx0 > TILE) ctx.fillRect(TILE, zy0, zx0 - TILE, zy1 - zy0);
+  if (zx1 < worldW - TILE) ctx.fillRect(zx1, zy0, worldW - TILE - zx1, zy1 - zy0);
 
   // The edges that are about to collapse flash
   if (zone.isWarning && Math.sin(time * 14) > 0) {
@@ -172,6 +180,11 @@ export function renderScene(rc: RenderContext): void {
 
   for (const bomb of snapshot.bombs) {
     drawBomb(ctx, bomb.tileX * TILE, bomb.tileY * TILE, bomb.timer, time);
+  }
+  // Bombs we just placed: shown at once, the server confirms them a moment later
+  for (const ghost of rc.predictedBombs ?? []) {
+    if (snapshot.bombs.some((b) => b.tileX === ghost.tileX && b.tileY === ghost.tileY)) continue;
+    drawBomb(ctx, ghost.tileX * TILE, ghost.tileY * TILE, CONSTANTS.BOMB_FUSE_SECONDS - ghost.age, time);
   }
   for (const exp of snapshot.explosions) {
     drawExplosionCell(ctx, exp.tileX * TILE, exp.tileY * TILE, exp.timer);
@@ -186,7 +199,9 @@ export function renderScene(rc: RenderContext): void {
       drawPlayer(ctx, p.x, p.y, p.facing, p.color, { invulnerable: p.invulnerable, fast: p.fast, inQuiz: p.inQuiz, moving }, time);
     }
     drawHearts(ctx, p.x, p.y - 13, p.lives, CONSTANTS.PLAYER_LIVES);
+    drawPowerIcons(ctx, p.x, p.y - 33, { invulnerable: p.invulnerable, fast: p.fast, blast: p.blast, infinite: p.infinite }, time);
   }
+  rc.effects?.draw(ctx, time);
 
   ctx.restore();
 
@@ -197,8 +212,8 @@ export function renderScene(rc: RenderContext): void {
   ctx.font = `${fontPx}px "Press Start 2P", monospace`;
   ctx.textAlign = 'center';
   ctx.lineJoin = 'round';
-  const toScreenX = (x: number) => (Math.round(x) - Math.round(camera.x)) * pixelScale;
-  const toScreenY = (y: number) => (Math.round(y) - Math.round(camera.y)) * pixelScale;
+  const toScreenX = (x: number) => (Math.round(x) - Math.round(camera.x) + shakeX) * pixelScale;
+  const toScreenY = (y: number) => (Math.round(y) - Math.round(camera.y) + shakeY) * pixelScale;
   for (const p of living) {
     const isSelf = p.id === selfPlayerId;
     const sx = toScreenX(p.x);

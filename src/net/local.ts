@@ -6,11 +6,12 @@
  */
 
 import type { WebSocket as WsSocket } from 'ws';
-import { ClientMessage, ServerMessage } from '@/shared/protocol.js';
+import { AppMessage, ClientMessage, ServerMessage } from '@/shared/protocol.js';
+import { MessageDecoder } from './decode.js';
 import { ConnectedClient, Room, RoomManager } from '../../server/rooms.js';
 import { sfx } from '../audio/sfx.js';
 
-export type MessageHandler = (msg: ServerMessage) => void;
+export type MessageHandler = (msg: AppMessage) => void;
 export type ConnectionHandler = (connected: boolean) => void;
 export type PingHandler = (ms: number) => void;
 
@@ -19,13 +20,14 @@ export class LocalClient {
   private connectionHandlers = new Set<ConnectionHandler>();
   private pingHandlers = new Set<PingHandler>();
   private manager = new RoomManager();
+  private decoder = new MessageDecoder();
   private session: { room: Room; client: ConnectedClient } | null = null;
   public playerId: string | null = null;
 
   /** Fake socket: what the server "sends" is delivered to the page (JSON copy, like a real network). */
   private readonly socket = {
     readyState: 1,
-    send: (data: string) => this.deliver(JSON.parse(data) as ServerMessage),
+    send: (data: string) => this.deliver(this.decoder.decode(JSON.parse(data) as ServerMessage)),
   } as unknown as WsSocket;
 
   public connect(): void {
@@ -35,14 +37,14 @@ export class LocalClient {
     });
   }
 
-  private deliver(msg: ServerMessage): void {
+  private deliver(msg: AppMessage): void {
     if (msg.type === 'room_created' || msg.type === 'room_joined') this.playerId = msg.playerId;
     if (msg.type === 'sfx') sfx.play(msg.sound);
     this.messageHandlers.forEach((h) => h(msg));
   }
 
   private reply(msg: ServerMessage): void {
-    this.deliver(JSON.parse(JSON.stringify(msg)) as ServerMessage);
+    this.deliver(this.decoder.decode(JSON.parse(JSON.stringify(msg)) as ServerMessage));
   }
 
   public send(msg: ClientMessage): void {
