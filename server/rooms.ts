@@ -75,7 +75,7 @@ export class RoomManager {
 
   constructor() {
     this.sweeper = setInterval(() => this.removeAbandonedRooms(), 15_000);
-    this.sweeper.unref();
+    this.sweeper.unref?.(); // browsers (demo build) return a number instead
   }
 
   private generateRoomCode(): string {
@@ -260,7 +260,7 @@ export class RoomManager {
     room.state = createGame({ seed: Date.now(), players }, room.rng);
     room.botBrains = Object.fromEntries(room.botSlots.map((b) => [b.id, createBotBrain(room.botLevel)]));
     // Optional shorter matches, e.g. MATCH_SECONDS=120 npm start (never longer than 5 minutes)
-    const limit = Number(process.env.MATCH_SECONDS);
+    const limit = Number(typeof process !== 'undefined' ? process.env.MATCH_SECONDS : 0);
     if (limit > 0 && limit < room.state.maxMatchTime) room.state.maxMatchTime = limit;
     room.heldInputs = {};
     room.pendingActions = {};

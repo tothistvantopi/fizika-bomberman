@@ -28,6 +28,10 @@ interface LobbyProps {
   onStartDemo: (name: string, color: string) => void;
 }
 
+/** Static browser-only build (vite --mode demo): only games against bots, no server. */
+const DEMO = import.meta.env.VITE_DEMO === '1';
+const REPO_URL = 'https://github.com/tothistvantopi/fizika-bomberman';
+
 const TIE_COLORS = [
   '#b13e53', '#ef7d57', '#ffcd75', '#a7f070', '#38b764', '#257179', '#73eff7', '#41a6f6',
   '#3b5dc9', '#5d275d', '#ff77a8', '#a05b2d', '#94b0c2', '#566c86', '#e8e8e8',
@@ -69,7 +73,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   onStartGame,
   onStartDemo,
 }) => {
-  const [tab, setTab] = useState<'create' | 'join'>('join');
+  const [tab, setTab] = useState<'create' | 'join'>(DEMO ? 'create' : 'join');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [color, setColor] = useState(TIE_COLORS[Math.floor(Math.random() * TIE_COLORS.length)]);
@@ -78,7 +82,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const inRoom = Boolean(roomCode);
   const isHost = inRoom && selfPlayerId === hostId;
   const canStart = isHost && players.length >= CONSTANTS.MIN_PLAYERS_TO_START;
-  const joinUrl = useJoinUrl(isHost);
+  const joinUrl = useJoinUrl(isHost && !DEMO);
 
   useEffect(() => {
     if (!joinUrl) {
@@ -125,7 +129,7 @@ export const Lobby: React.FC<LobbyProps> = ({
           {!inRoom ? (
             <>
               <div className="mb-4 flex gap-2">
-                {(['join', 'create'] as const).map((t) => (
+                {DEMO ? null : (['join', 'create'] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -186,19 +190,29 @@ export const Lobby: React.FC<LobbyProps> = ({
                   </div>
                 </div>
 
-                <button type="submit" disabled={!connected} className="px-btn !py-4">
-                  {tab === 'create' ? HU.lobby.createRoomBtn : HU.lobby.joinRoomBtn}
-                </button>
+                {!DEMO && (
+                  <button type="submit" disabled={!connected} className="px-btn !py-4">
+                    {tab === 'create' ? HU.lobby.createRoomBtn : HU.lobby.joinRoomBtn}
+                  </button>
+                )}
                 {tab === 'create' && (
                   <button
                     type="button"
                     disabled={!connected}
                     onClick={() => onStartDemo(name.trim() || 'Tanár', color)}
-                    className="px-btn flex items-center justify-center gap-2 !text-[9px]"
+                    className={DEMO ? 'px-btn flex items-center justify-center gap-2 !py-4' : 'px-btn flex items-center justify-center gap-2 !text-[9px]'}
                     style={{ ['--btn' as string]: '#38b764' }}
                   >
-                    <PixelIcon name="flask" size={14} /> {HU.lobby.demoBtn}
+                    <PixelIcon name="flask" size={14} /> {DEMO ? HU.lobby.demoOnlyBtn : HU.lobby.demoBtn}
                   </button>
+                )}
+                {DEMO && (
+                  <div className="px-inset p-3 text-lg text-px-silver">
+                    {HU.lobby.demoNote}{' '}
+                    <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-px-cyan underline">
+                      {HU.lobby.demoDownload}
+                    </a>
+                  </div>
                 )}
               </form>
             </>

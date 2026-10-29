@@ -157,15 +157,19 @@ Módosítás után: `npm run host` (újra felépíti és elindítja).
 
 ---
 
-## Online kipróbálás (egy kattintással), utána letöltés
+## Online kipróbálható demó (Vercel) + letölthető többjátékos verzió
 
-Ha először csak ki szeretnéd próbálni, nem kell semmit telepíteni: a repó tartalmaz egy `render.yaml` fájlt, amellyel ingyenes online példány indítható a [Render](https://render.com) szolgáltatón.
+A repó két változatot tartalmaz ugyanabból a kódból:
 
-1. Regisztrálj a render.com oldalon (GitHub-fiókkal is megy).
-2. **New → Blueprint**, válaszd ki ezt a repót, majd **Apply**.
-3. Pár perc múlva kapsz egy `https://fizika-bomberman-xxxx.onrender.com` címet. Ezt bárki megnyithatja telefonról, tabletről vagy gépről.
+| | Demó (online) | Teljes (letöltve) |
+|---|---|---|
+| Hol fut | a böngészőben, statikus oldalként (Vercel) | a tanári gépen, Node-szerverrel |
+| Ellenfelek | csak gépi botok (te + 7 bot) | diákok + botok, max. 15 fő |
+| Parancs | `npm run build:demo` | `npm run host` |
 
-Megjegyzés: az ingyenes csomag 15 perc használat nélkül elalszik (az első megnyitás ilyenkor ~1 percig tart), és az internetes késleltetés miatt a játék kicsit lassabb, mint a helyi Wi-Fin. Ez kipróbálásra jó. Ha tetszik, töltsd le a repót, és indítsd a saját gépeden (lásd **Gyors indítás**): osztályteremben az a stabilabb.
+A demóhoz nem kell játékszerver: a játékmotor és a botok magában a böngészőben futnak, ezért a Vercel is kiszolgálja. A többjátékos módhoz a repót le kell tölteni (lásd **Gyors indítás**), mert ahhoz tartós WebSocket-szerver kell.
+
+**A demó közzététele a Vercelen:** a Vercelen válaszd az *Add New → Project* pontot, importáld ezt a repót, és hagyd meg a beállításokat: a `vercel.json` már megadja a build parancsot (`npm run build:demo`) és a kimeneti mappát (`dist-demo`).
 
 ---
 
