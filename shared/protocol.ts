@@ -50,7 +50,7 @@ export interface SnapshotSelfData {
   inQuiz: boolean;
   quizPrompt: string | null;
   quizTopic: string | null;
-  quizOptions: [string, string, string] | null;
+  quizOptions: [string, string, string, string] | null;
   quizTimer: number;
   quizResult: QuizResultInfo | null;
   killedBy: { name: string; color: string } | null; // set once this player is out
@@ -167,7 +167,7 @@ export function validateClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'quiz_answer': {
       const answerIndex = Number(msg.answerIndex);
-      if (!Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 2) return null;
+      if (!Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) return null;
       return { type: 'quiz_answer', answerIndex };
     }
     case 'add_bot':

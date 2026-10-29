@@ -307,7 +307,7 @@ function startQuiz(state: GameState, player: Player, tileIndex: number, rng: RNG
   player.inQuiz = true;
   player.quizTileIndex = tileIndex;
   player.quizQuestion = question;
-  player.quizOptionsShuffled = [shuffled[0], shuffled[1], shuffled[2]];
+  player.quizOptionsShuffled = [shuffled[0], shuffled[1], shuffled[2], shuffled[3]];
   player.quizTimer = CONSTANTS.QUIZ_TIME_SECONDS;
   player.kx = 0;
   player.ky = 0;
@@ -619,7 +619,7 @@ export function applyAction(
   const player = state.players[playerId];
   if (!player || !player.alive || state.win.over) return events;
 
-  if (action.type === 'quiz_answer' && player.inQuiz && action.answerIndex >= 0 && action.answerIndex <= 2) {
+  if (action.type === 'quiz_answer' && player.inQuiz && action.answerIndex >= 0 && action.answerIndex <= 3) {
     finishQuiz(state, player, action.answerIndex, rng, events);
   }
   return events;

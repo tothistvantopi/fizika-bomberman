@@ -134,6 +134,84 @@ export function drawExplosionCell(ctx: CanvasRenderingContext2D, px: number, py:
     ctx.fillRect(px + 6, py + 6, 4, 4);
   }
 }
+const playerBodyCache = new Map<string, HTMLCanvasElement>();
+const BODY_MARGIN = 3;
+
+/** The little Einstein itself: only 3 bob phases x 4 directions per colour, so it is cached as a sprite. */
+function getPlayerBody(facing: 'up' | 'down' | 'left' | 'right', tieColor: string, bob: number, step: number): HTMLCanvasElement {
+  const key = `${tieColor}|${facing}|${bob}|${step}`;
+  let sprite = playerBodyCache.get(key);
+  if (!sprite) {
+    if (playerBodyCache.size > 400) playerBodyCache.clear();
+    sprite = document.createElement('canvas');
+    sprite.width = 16;
+    sprite.height = 18;
+    const c = sprite.getContext('2d')!;
+    const x = BODY_MARGIN;
+    const y = BODY_MARGIN;
+  // Shadow
+  c.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  c.fillRect(x - 1, y + 10, 12, 2);
+
+  // Wild white hair
+  c.fillStyle = '#e2e8f0';
+  c.fillRect(x - 1, y - 2 + bob, 12, 4);
+  c.fillRect(x - 2, y - 1 + bob, 3, 5);
+  c.fillRect(x + 9, y - 1 + bob, 3, 5);
+
+  // Face
+  c.fillStyle = '#fed7aa';
+  c.fillRect(x + 1, y + 1 + bob, 8, 5);
+
+  // Glasses and moustache
+  c.fillStyle = '#0f172a';
+  if (facing === 'down') {
+    c.fillRect(x + 2, y + 2 + bob, 2, 2);
+    c.fillRect(x + 6, y + 2 + bob, 2, 2);
+    c.fillRect(x + 4, y + 2 + bob, 2, 1);
+    c.fillStyle = '#f8fafc';
+    c.fillRect(x + 3, y + 4 + bob, 4, 2);
+  } else if (facing === 'right') {
+    c.fillRect(x + 5, y + 2 + bob, 3, 2);
+    c.fillStyle = '#f8fafc';
+    c.fillRect(x + 6, y + 4 + bob, 3, 2);
+  } else if (facing === 'left') {
+    c.fillRect(x + 2, y + 2 + bob, 3, 2);
+    c.fillStyle = '#f8fafc';
+    c.fillRect(x + 1, y + 4 + bob, 3, 2);
+  } else {
+    c.fillStyle = '#e2e8f0';
+    c.fillRect(x + 1, y + 1 + bob, 8, 3); // back of the head: more hair
+  }
+
+  // White lab coat
+  c.fillStyle = '#f4f4f4';
+  c.fillRect(x, y + 6 + bob, 10, 5);
+  c.fillStyle = '#cbd5e1';
+  c.fillRect(x + 1, y + 7 + bob, 1, 3);
+  c.fillRect(x + 8, y + 7 + bob, 1, 3);
+
+  // Necktie with dark outline so every colour is visible on the white coat
+  if (facing !== 'up') {
+    c.fillStyle = '#0f172a';
+    c.fillRect(x + 3, y + 6 + bob, 4, 1);
+    c.fillRect(x + 3, y + 7 + bob, 1, 4);
+    c.fillRect(x + 6, y + 7 + bob, 1, 4);
+    c.fillRect(x + 4, y + 10 + bob, 2, 1);
+    c.fillStyle = tieColor;
+    c.fillRect(x + 4, y + 7 + bob, 2, 3);
+  }
+
+  // Trousers and shoes
+  c.fillStyle = '#1e293b';
+    c.fillRect(x + 2, y + 11 + bob, 2, 1 + (step > 0 ? 1 : 0));
+    c.fillRect(x + 6, y + 11 + bob, 2, 1 + (step < 0 ? 1 : 0));
+
+    playerBodyCache.set(key, sprite);
+  }
+  return sprite;
+}
+
 /**
  * Draws a little Einstein: wild white hair, moustache, glasses, white lab coat
  * and a coloured necktie (the tie colour identifies the player).
@@ -176,64 +254,8 @@ export function drawPlayer(
     ctx.strokeRect(x - 2.5, y - 3.5 + bob, 15, 17);
   }
 
-  // Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.fillRect(x - 1, y + 10, 12, 2);
-
-  // Wild white hair
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillRect(x - 1, y - 2 + bob, 12, 4);
-  ctx.fillRect(x - 2, y - 1 + bob, 3, 5);
-  ctx.fillRect(x + 9, y - 1 + bob, 3, 5);
-
-  // Face
-  ctx.fillStyle = '#fed7aa';
-  ctx.fillRect(x + 1, y + 1 + bob, 8, 5);
-
-  // Glasses and moustache
-  ctx.fillStyle = '#0f172a';
-  if (facing === 'down') {
-    ctx.fillRect(x + 2, y + 2 + bob, 2, 2);
-    ctx.fillRect(x + 6, y + 2 + bob, 2, 2);
-    ctx.fillRect(x + 4, y + 2 + bob, 2, 1);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(x + 3, y + 4 + bob, 4, 2);
-  } else if (facing === 'right') {
-    ctx.fillRect(x + 5, y + 2 + bob, 3, 2);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(x + 6, y + 4 + bob, 3, 2);
-  } else if (facing === 'left') {
-    ctx.fillRect(x + 2, y + 2 + bob, 3, 2);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(x + 1, y + 4 + bob, 3, 2);
-  } else {
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(x + 1, y + 1 + bob, 8, 3); // back of the head: more hair
-  }
-
-  // White lab coat
-  ctx.fillStyle = '#f4f4f4';
-  ctx.fillRect(x, y + 6 + bob, 10, 5);
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillRect(x + 1, y + 7 + bob, 1, 3);
-  ctx.fillRect(x + 8, y + 7 + bob, 1, 3);
-
-  // Necktie with dark outline so every colour is visible on the white coat
-  if (facing !== 'up') {
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(x + 3, y + 6 + bob, 4, 1);
-    ctx.fillRect(x + 3, y + 7 + bob, 1, 4);
-    ctx.fillRect(x + 6, y + 7 + bob, 1, 4);
-    ctx.fillRect(x + 4, y + 10 + bob, 2, 1);
-    ctx.fillStyle = tieColor;
-    ctx.fillRect(x + 4, y + 7 + bob, 2, 3);
-  }
-
-  // Trousers and shoes
-  ctx.fillStyle = '#1e293b';
   const step = opts.moving ? Math.round(Math.sin(time * 16)) : 0;
-  ctx.fillRect(x + 2, y + 11 + bob, 2, 1 + (step > 0 ? 1 : 0));
-  ctx.fillRect(x + 6, y + 11 + bob, 2, 1 + (step < 0 ? 1 : 0));
+  ctx.drawImage(getPlayerBody(facing, tieColor, bob, step), x - BODY_MARGIN, y - BODY_MARGIN);
 
   ctx.restore();
 }
@@ -286,21 +308,30 @@ export function drawCachedTile(ctx: CanvasRenderingContext2D, kind: TileKind, px
   ctx.drawImage(tile, px, py);
 }
 
-/** Pixel hearts above a player: filled for the lives left. */
+/** Pixel hearts above a player: filled for the lives left (one cached sprite per lives/max pair). */
 const HEART = ['.#.#.', '#####', '.###.', '..#..'];
+const heartCache = new Map<string, HTMLCanvasElement>();
 export function drawHearts(ctx: CanvasRenderingContext2D, cx: number, y: number, lives: number, maxLives: number): void {
-  const width = maxLives * 6 - 1;
-  const left = Math.round(cx - width / 2);
-  for (let i = 0; i < maxLives; i++) {
-    ctx.fillStyle = i < lives ? '#b13e53' : '#333c57';
-    HEART.forEach((row, ry) => {
-      for (let rx = 0; rx < row.length; rx++) {
-        if (row[rx] === '#') ctx.fillRect(left + i * 6 + rx, y + ry, 1, 1);
+  const key = `${lives}/${maxLives}`;
+  let sprite = heartCache.get(key);
+  if (!sprite) {
+    sprite = document.createElement('canvas');
+    sprite.width = maxLives * 6 - 1;
+    sprite.height = HEART.length;
+    const c = sprite.getContext('2d')!;
+    for (let i = 0; i < maxLives; i++) {
+      c.fillStyle = i < lives ? '#b13e53' : '#333c57';
+      HEART.forEach((row, ry) => {
+        for (let rx = 0; rx < row.length; rx++) {
+          if (row[rx] === '#') c.fillRect(i * 6 + rx, ry, 1, 1);
+        }
+      });
+      if (i < lives) {
+        c.fillStyle = '#ef7d57'; // highlight
+        c.fillRect(i * 6 + 1, 1, 1, 1);
       }
-    });
-    if (i < lives) {
-      ctx.fillStyle = '#ef7d57'; // highlight
-      ctx.fillRect(left + i * 6 + 1, y + 1, 1, 1);
     }
+    heartCache.set(key, sprite);
   }
+  ctx.drawImage(sprite, Math.round(cx - sprite.width / 2), Math.round(y));
 }

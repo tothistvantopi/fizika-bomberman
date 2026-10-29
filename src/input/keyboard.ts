@@ -19,7 +19,7 @@ type OneShot = 'placeBomb' | 'placeWall' | 'toggleMap' | 'toggleHelp' | 'toggleM
 const GAME_KEYS = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyB', 'KeyF', 'KeyQ', 'KeyP', 'KeyM',
-  'Digit1', 'Digit2', 'Digit3',
+  'Digit1', 'Digit2', 'Digit3', 'Digit4',
 ]);
 
 export class InputManager {

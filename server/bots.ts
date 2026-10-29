@@ -28,9 +28,9 @@ interface Profile {
 }
 
 const PROFILES: Record<BotLevel, Profile> = {
-  easy: { horizon: 1.3, quizAccuracy: 0.4, quizDelay: [4, 9], mistakeChance: 0.25, aggression: 0.35, questLove: 0.5, bombCooldown: 2.5 },
-  normal: { horizon: 2.0, quizAccuracy: 0.7, quizDelay: [3, 7], mistakeChance: 0.08, aggression: 0.7, questLove: 0.7, bombCooldown: 1.4 },
-  hard: { horizon: 2.6, quizAccuracy: 0.92, quizDelay: [2, 5], mistakeChance: 0, aggression: 1, questLove: 0.65, bombCooldown: 0.8 },
+  easy: { horizon: 1.3, quizAccuracy: 0.3, quizDelay: [4, 9], mistakeChance: 0.25, aggression: 0.35, questLove: 0.5, bombCooldown: 2.5 },
+  normal: { horizon: 2.0, quizAccuracy: 0.55, quizDelay: [3, 7], mistakeChance: 0.08, aggression: 0.7, questLove: 0.7, bombCooldown: 1.4 },
+  hard: { horizon: 2.6, quizAccuracy: 0.8, quizDelay: [2, 5], mistakeChance: 0, aggression: 1, questLove: 0.65, bombCooldown: 0.8 },
 };
 
 export const BOT_NAMES = ['Newton', 'Galilei', 'Curie', 'Tesla', 'Faraday', 'Kepler', 'Bohr', 'Planck', 'Eötvös', 'Hawking', 'Maxwell', 'Pascal', 'Watt', 'Joule'];
@@ -284,7 +284,7 @@ export function thinkBot(world: World, bot: Player, brain: BotBrain): BotAction 
       const [lo, hi] = profile.quizDelay;
       brain.quizAnswerAt = now + lo + Math.random() * (hi - lo);
       const correct = bot.quizOptionsShuffled.indexOf(bot.quizQuestion.options[bot.quizQuestion.correctIndex]);
-      const wrong = [0, 1, 2].filter((i) => i !== correct);
+      const wrong = [0, 1, 2, 3].filter((i) => i !== correct);
       brain.quizAnswerIndex = Math.random() < profile.quizAccuracy ? correct : wrong[Math.floor(Math.random() * wrong.length)];
     }
     if (now >= brain.quizAnswerAt) {

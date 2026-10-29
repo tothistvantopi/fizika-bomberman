@@ -58,7 +58,7 @@ export const CONSTANTS = {
   WALL_COOLDOWN_SECONDS: 0.4,
 
   // Question power-ups
-  QUIZ_TIME_SECONDS: 20,
+  QUIZ_TIME_SECONDS: 25,
   QUIZ_GRACE_SECONDS: 1.5, // protection right after a quiz ends
   INVULNERABLE_SECONDS: 30,
   SPEED_SECONDS: 30,

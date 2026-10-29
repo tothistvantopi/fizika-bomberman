@@ -101,7 +101,7 @@ Diákoknak:      http://192.168.1.23:3000
 
 **Fal:** magad elé építhetsz egy falat, ami **egy robbanást kibír** (megrepedezik), a második már lerombolja. 3 falad van, 12 másodpercenként pótlódik egy.
 
-**Kérdőjel ❓:** ráállva fizikakérdést kapsz 20 másodpercre (közben védett vagy és nem tudsz mozogni). A válasz után azonnal látod, jó volt-e: a kiválasztott válasz zöld (jó) vagy piros (rossz), és csak rossz válasznál jelöli zölddel a helyeset. **Helyes válaszra egy véletlen extra** jár:
+**Kérdőjel ❓:** ráállva fizikakérdést kapsz 25 másodpercre, négy válaszlehetőséggel (közben védett vagy és nem tudsz mozogni). A válasz után azonnal látod, jó volt-e: a kiválasztott válasz zöld (jó) vagy piros (rossz), és csak rossz válasznál jelöli zölddel a helyeset. **Helyes válaszra egy véletlen extra** jár:
 
 | Extra | Hatás |
 |---|---|
@@ -114,7 +114,7 @@ Diákoknak:      http://192.168.1.23:3000
 
 **Vége:** aki utoljára marad, nyer. Ha lejár az idő (5 perc), a túlélők közül a **több élet**, majd a **több kiütés** dönt. A kiesettek sorrendjében az utoljára kiesett a jobb helyezett.
 
-A kérdések a **7. osztályos kinematika és dinamika** témaköréből vannak (egyenletes és változó mozgás, gyorsulás, szabadesés, tehetetlenség, tömeg, erő, Newton törvényei, eredő erő, súrlódás, közegellenállás). Elméleti és hétköznapi példás kérdések vannak, **számolás nincs**, és munka/energia sincs. A kérdések a `shared/data/questions.ts` fájlban vannak, könnyen bővíthetők.
+A kérdések a **7. osztályos kinematika és dinamika** témaköréből vannak (egyenletes és változó mozgás, gyorsulás, szabadesés, tehetetlenség, tömeg, erő, Newton törvényei, eredő erő, súrlódás, közegellenállás). A kérdések többsége helyzetelemzés (tipikus tévképzetekkel), négy válasszal, és a válaszok egyforma hosszúak, így a hosszából nem lehet kitalálni a jót. Elméleti és hétköznapi példás kérdések vannak, **számolás nincs**, és munka/energia sincs. A kérdések a `shared/data/questions.ts` fájlban vannak, könnyen bővíthetők.
 
 ---
 
@@ -124,8 +124,8 @@ A váróteremben a szobavezető **+ / −** gombokkal botokat adhat hozzá vagy 
 
 | Szint | Viselkedés |
 |---|---|
-| **Könnyű** | lassan reagál, néha rosszul lép, a kérdéseknek kb. 40%-át találja el, ritkán támad |
-| **Közepes** | kikerüli a robbanásokat, vadászik a játékosokra, kérdőjeleket gyűjt, a kérdések kb. 70%-át találja el |
+| **Könnyű** | lassan reagál, néha rosszul lép, a kérdéseknek kb. 30%-át találja el, ritkán támad |
+| **Közepes** | kikerüli a robbanásokat, vadászik a játékosokra, kérdőjeleket gyűjt, a kérdések kb. 55%-át találja el |
 | **Nehéz** | korán menekül a robbanások elől, agresszíven vadászik, szinte mindig jól válaszol |
 
 A botok fizikus nevet kapnak (Newton, Galilei, Curie, …). Úgy gondolkodnak, mint egy játékos: veszélytérképet építenek a bombákról és a szűkülő zónáról, csak akkor raknak bombát, ha biztosan ki tudnak menekülni előle, téglákat törnek, ha elállják az utat, és időnként falat építenek. A viselkedésük a `server/bots.ts` fájlban van.

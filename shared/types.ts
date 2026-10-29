@@ -18,7 +18,7 @@ export type PowerUpType = 'INVULNERABLE' | 'SPEED' | 'BIG_BLAST' | 'INFINITE_BOM
 export interface PhysicsQuestion {
   id: number;
   prompt: string;
-  options: [string, string, string];
+  options: [string, string, string, string];
   correctIndex: number;
   topic: string;
   explanation: string;
@@ -59,7 +59,7 @@ export interface Player {
   inQuiz: boolean;
   quizTileIndex: number | null;
   quizQuestion: PhysicsQuestion | null;
-  quizOptionsShuffled: [string, string, string] | null;
+  quizOptionsShuffled: [string, string, string, string] | null;
   quizTimer: number;
   lastQuizResult: QuizResultInfo | null;
   seenQuestionIds: number[]; // avoids repeating questions until the bank is exhausted

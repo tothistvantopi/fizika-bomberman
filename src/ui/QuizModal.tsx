@@ -19,7 +19,7 @@ interface QuizModalProps {
 interface Question {
   prompt: string;
   topic: string;
-  options: [string, string, string];
+  options: [string, string, string, string];
 }
 
 interface Feedback {
@@ -28,7 +28,7 @@ interface Feedback {
   seqAtClick: number;
 }
 
-const ANSWER_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'];
+const ANSWER_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'];
 
 export const QuizModal: React.FC<QuizModalProps> = ({ self, onAnswer }) => {
   const inQuiz = self.inQuiz && self.quizPrompt !== null && self.quizOptions !== null;
@@ -60,7 +60,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({ self, onAnswer }) => {
     if (!inQuiz) return;
     const onKey = (e: KeyboardEvent) => {
       const i = ANSWER_KEYS.indexOf(e.code);
-      if (!e.repeat && i >= 0) submit(i % 3);
+      if (!e.repeat && i >= 0) submit(i % 4);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

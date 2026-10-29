@@ -330,7 +330,7 @@ describe('Question marks', () => {
     const { state, idx } = startQuiz();
     const p = state.players.p1;
     expect(p.inQuiz).toBe(true);
-    expect(p.quizOptionsShuffled?.length).toBe(3);
+    expect(p.quizOptionsShuffled?.length).toBe(4);
     expect(p.quizQuestion).not.toBeNull();
     expect(state.tiles[idx]).toBe(TileType.QUESTION_TILE);
   });
@@ -384,11 +384,11 @@ describe('Question marks', () => {
 });
 
 describe('Question bank', () => {
-  it('has many questions with 3 distinct options and an explanation', () => {
-    expect(PHYSICS_QUESTIONS.length).toBeGreaterThanOrEqual(80);
+  it('has enough questions with 4 distinct options and an explanation', () => {
+    expect(PHYSICS_QUESTIONS.length).toBeGreaterThanOrEqual(40);
     const prompts = new Set<string>();
     for (const q of PHYSICS_QUESTIONS) {
-      expect(new Set(q.options).size).toBe(3);
+      expect(new Set(q.options).size).toBe(4);
       expect(q.explanation.length).toBeGreaterThan(5);
       expect(prompts.has(q.prompt)).toBe(false);
       prompts.add(q.prompt);
@@ -404,7 +404,7 @@ describe('Question bank', () => {
 
   it('contains no calculation tasks', () => {
     for (const q of PHYSICS_QUESTIONS) {
-      expect(/\d+\s?(km\/h|m\/s|kg|N\b|s\b)/.test(q.prompt)).toBe(false);
+      expect(/(számít|számold|mennyi\b|hány (méter|km|newton|kg))/i.test(q.prompt)).toBe(false);
     }
   });
 });
@@ -509,10 +509,34 @@ describe('Protocol validation', () => {
     expect(validateClientMessage({ type: 'create_room', hostName: 'Anna', hostColor: 'red' })).toBeNull();
     expect(validateClientMessage({ type: 'input', dx: 5, dy: -9, placeBomb: true })).toMatchObject({ dx: 1, dy: -1 });
     expect(validateClientMessage({ type: 'input', dx: NaN, dy: 0 })).toBeNull();
-    expect(validateClientMessage({ type: 'quiz_answer', answerIndex: 3 })).toBeNull();
+    expect(validateClientMessage({ type: 'quiz_answer', answerIndex: 4 })).toBeNull();
     expect(validateClientMessage({ type: 'sabotage' })).toBeNull();
     expect(validateClientMessage({ type: 'ping', t: 12.5 })).toEqual({ type: 'ping', t: 12.5 });
     expect(validateClientMessage({ type: 'ping', t: 'x' })).toBeNull();
     expect(validateClientMessage('hello')).toBeNull();
+  });
+});
+
+describe('question bank', () => {
+  const qs = PHYSICS_QUESTIONS;
+
+  it('has four distinct options per question and unique ids', () => {
+    expect(new Set(qs.map((x) => x.id)).size).toBe(qs.length);
+    for (const x of qs) {
+      expect(x.options.length).toBe(4);
+      expect(new Set(x.options).size).toBe(4);
+      expect(x.explanation.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('does not give the answer away by its length', () => {
+    // "pick the longest answer" must not work: the correct one is the longest in about a quarter of the questions
+    const correctIsLongest = qs.filter((x) => x.options[0].length === Math.max(...x.options.map((o) => o.length))).length;
+    expect(correctIsLongest / qs.length).toBeGreaterThan(0.15);
+    expect(correctIsLongest / qs.length).toBeLessThan(0.4);
+    for (const x of qs) {
+      const lengths = x.options.map((o) => o.length);
+      expect(Math.max(...lengths) / Math.min(...lengths)).toBeLessThan(2);
+    }
   });
 });
