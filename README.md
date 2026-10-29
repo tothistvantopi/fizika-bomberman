@@ -157,6 +157,18 @@ Módosítás után: `npm run host` (újra felépíti és elindítja).
 
 ---
 
+## Online kipróbálás (egy kattintással), utána letöltés
+
+Ha először csak ki szeretnéd próbálni, nem kell semmit telepíteni: a repó tartalmaz egy `render.yaml` fájlt, amellyel ingyenes online példány indítható a [Render](https://render.com) szolgáltatón.
+
+1. Regisztrálj a render.com oldalon (GitHub-fiókkal is megy).
+2. **New → Blueprint**, válaszd ki ezt a repót, majd **Apply**.
+3. Pár perc múlva kapsz egy `https://fizika-bomberman-xxxx.onrender.com` címet. Ezt bárki megnyithatja telefonról, tabletről vagy gépről.
+
+Megjegyzés: az ingyenes csomag 15 perc használat nélkül elalszik (az első megnyitás ilyenkor ~1 percig tart), és az internetes késleltetés miatt a játék kicsit lassabb, mint a helyi Wi-Fin. Ez kipróbálásra jó. Ha tetszik, töltsd le a repót, és indítsd a saját gépeden (lásd **Gyors indítás**): osztályteremben az a stabilabb.
+
+---
+
 ## Játék az interneten (nem csak egy teremben)
 
 A játék egy sima Node-szerver (HTTP + WebSocket), ezért bármilyen olyan helyen futtatható, ahol Node fut, és engedélyezett a WebSocket (pl. egy saját VPS, Render, Railway, Fly.io). Lépések röviden:
